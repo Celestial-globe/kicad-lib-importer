@@ -67,11 +67,23 @@
 
 Chrome / Edge は `AppData` や `Library` などのシステムフォルダの選択をブロックするため、直接更新できない場合があります。そのときは「既存ファイルを読み込み、更新版をダウンロード」を選び、ダウンロードしたファイルを KiCad 終了後に上記フォルダへ上書きしてください。（統合ライブラリ方式なら、この作業は初回だけです）
 
+## 動作確認結果
+
+Component Search Engine (SamacSys) からダウンロードした `LIB_KSD42.zip` を、実機の Chrome で取り込んだ結果です。
+
+- 設定: 部品ごとに個別のライブラリを作る / テーブルの登録先はプロジェクト / 保存先はプロジェクト内の `test_lib`
+- `${KIPRJMOD}/test_lib` の相対パスが自動で設定されました
+- シンボル `KSD42` の Footprint が `KSD42:DIP815W60P254L1210H450Q8N` に書き換わりました
+- フットプリントの 3D モデルが `KSD42.3dshapes/KSD42.stp` に紐付きました
+- `sym-lib-table` / `fp-lib-table` に `KSD42` が追加されました
+
+![LIB_KSD42.zip の取り込み結果](docs/images/test-result.png)
+
 ## 対応している部品サイト
 
 | サイト | 状態 |
 | --- | --- |
-| [Component Search Engine](https://componentsearchengine.com/) (SamacSys / Mouser・RS 等の ECAD モデル) | 主対象 |
+| [Component Search Engine](https://componentsearchengine.com/) (SamacSys / Mouser・RS 等の ECAD モデル) | 主対象（実機で動作確認済み） |
 | SnapEDA | 対応（実データでの検証は未実施） |
 | Ultra Librarian | 対応（実データでの検証は未実施） |
 | その他 | ZIP 内の `.kicad_sym` / `.lib` / `.kicad_mod` / `.step` / `.stp` / `.wrl` を汎用的に処理 |
