@@ -1,0 +1,87 @@
+:root {
+  --bg: #f5f6f8;
+  --card: #fff;
+  --fg: #1d2330;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --accent-weak: #e8efff;
+  --border: #d9dde4;
+  --warn: #b45309;
+  --ok: #15803d;
+  --err: #b91c1c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c; --card: #1d2128; --fg: #e5e7eb; --muted: #9ca3af;
+    --accent: #60a5fa; --accent-weak: #1e2a40; --border: #343a45;
+    --warn: #f59e0b; --ok: #4ade80; --err: #f87171;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  line-height: 1.6;
+}
+header, main, footer { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+header h1 { margin: 24px 0 4px; font-size: 1.6rem; }
+.lead { color: var(--muted); margin-top: 0; }
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px 20px; margin: 16px 0;
+}
+.card h2 { margin: 0 0 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+.card h3 { font-size: .95rem; margin: 16px 0 6px; }
+.num {
+  display: inline-flex; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent); color: #fff; align-items: center; justify-content: center; font-size: .85rem;
+}
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0; }
+.indent { margin-left: 26px; display: flex; flex-direction: column; gap: 6px; }
+.hint { color: var(--muted); font-size: .85rem; margin: 4px 0 8px; }
+.warn-text { color: var(--warn); }
+.ok-text { color: var(--ok); }
+.muted { color: var(--muted); }
+.path { font-family: ui-monospace, Consolas, monospace; font-size: .9rem; }
+code { font-family: ui-monospace, Consolas, monospace; font-size: .85em; background: var(--accent-weak); padding: 1px 4px; border-radius: 4px; }
+ul.paths { margin: 4px 0 8px; padding-left: 20px; font-size: .85rem; }
+button, select, input[type=text] {
+  font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--card); color: var(--fg);
+}
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; padding: 8px 20px; }
+button.small { padding: 0 8px; font-size: .75rem; }
+button.link { border: none; background: none; color: var(--accent); padding: 0; text-decoration: underline; }
+label.radio, label.check { display: inline-flex; align-items: center; gap: 4px; }
+.alert { background: #fef3c7; color: #7c2d12; border: 1px solid #f59e0b; padding: 10px 14px; border-radius: 8px; }
+#dropzone {
+  border: 2px dashed var(--border); border-radius: 10px; padding: 28px; text-align: center;
+  transition: background .15s, border-color .15s;
+}
+#dropzone.over { border-color: var(--accent); background: var(--accent-weak); }
+#dropzone p { margin: 4px 0; }
+.archive {
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin: 10px 0;
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 12px;
+}
+.archive .title { font-weight: 600; }
+.archive .src { font-size: .8rem; color: var(--accent); }
+.archive .items { grid-column: 1 / -1; font-size: .85rem; }
+.archive .items span { margin-right: 14px; }
+.archive .warn { grid-column: 1 / -1; color: var(--warn); font-size: .8rem; margin: 0; padding-left: 18px; }
+.archive.error { border-color: var(--err); }
+.archive .err { grid-column: 1 / -1; color: var(--err); font-size: .85rem; }
+.archive input.part { font-size: .85rem; padding: 2px 6px; }
+#log {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+  font-size: .8rem; white-space: pre-wrap; max-height: 420px; overflow: auto;
+}
+#log .head { font-weight: 700; }
+#log .warn { color: var(--warn); }
+#log .error { color: var(--err); }
+#log .ok { color: var(--ok); font-weight: 700; }
+footer { color: var(--muted); font-size: .8rem; padding-bottom: 32px; }
+footer a { color: var(--accent); }

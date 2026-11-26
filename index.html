@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KiCad Library Importer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect x=%224%22 y=%223%22 width=%228%22 height=%2210%22 fill=%22%232563eb%22/%3E%3Cpath d=%22M2 5h2M2 8h2M2 11h2M12 5h2M12 8h2M12 11h2%22 stroke=%22%23888%22/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>KiCad Library Importer</h1>
+    <p class="lead">部品サイトからダウンロードした KiCad ライブラリの ZIP をドロップするだけで、指定フォルダへ保存し、シンボル・フットプリント・3D モデルのリンクと <code>sym-lib-table</code> / <code>fp-lib-table</code> を一括設定します。処理はすべてブラウザ内で完結し、ファイルが外部に送信されることはありません。</p>
+    <div id="browser-warning" class="alert" hidden>
+      このブラウザは File System Access API に対応していないため、フォルダへの直接保存ができません。<strong>Google Chrome</strong> または <strong>Microsoft Edge</strong>（PC 版）で開いてください。
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2><span class="num">1</span>ライブラリの保存先</h2>
+      <div class="row">
+        <button id="pick-libroot" type="button">フォルダを選択…</button>
+        <span id="libroot-name" class="path muted">未選択</span>
+      </div>
+      <p class="hint">ローカルフォルダのほか、ネットワークドライブ（例: <code>Z:\KiCadLib</code>）も選択できます。選択したフォルダは次回以降も記憶されます。</p>
+
+      <div class="row">
+        <label class="radio"><input type="radio" name="libMode" value="merged" checked> 1つのライブラリにまとめる</label>
+        <input id="libName" type="text" value="MyParts" size="16" aria-label="ライブラリ名">
+      </div>
+      <div class="row">
+        <label class="radio"><input type="radio" name="libMode" value="perPart"> 部品ごとに個別のライブラリを作る</label>
+      </div>
+      <p class="hint" id="layout-hint"></p>
+    </section>
+
+    <section class="card">
+      <h2><span class="num">2</span>ライブラリテーブルの登録先</h2>
+      <div class="row tabs">
+        <label class="radio"><input type="radio" name="scope" value="project" checked> プロジェクト</label>
+        <label class="radio"><input type="radio" name="scope" value="global"> グローバル</label>
+        <label class="radio"><input type="radio" name="scope" value="none"> 登録しない（ファイル保存のみ）</label>
+      </div>
+
+      <div id="scope-project" class="scope-panel">
+        <div class="row">
+          <button id="pick-project" type="button">KiCad プロジェクトフォルダを選択…</button>
+          <span id="project-name" class="path muted">未選択</span>
+        </div>
+        <p class="hint">プロジェクトフォルダ（<code>.kicad_pro</code> がある場所）の <code>sym-lib-table</code> / <code>fp-lib-table</code> を作成・更新します。</p>
+      </div>
+
+      <div id="scope-global" class="scope-panel" hidden>
+        <div class="row">
+          <label>KiCad バージョン
+            <select id="kicadMajor">
+              <option>10.0</option><option selected>9.0</option><option>8.0</option><option>7.0</option><option>6.0</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">グローバルのライブラリテーブルは次の場所にあります。</p>
+        <ul class="paths">
+          <li>Windows: <code id="gp-win"></code> <button type="button" class="copy small" data-copy="gp-win">コピー</button></li>
+          <li>macOS: <code id="gp-mac"></code> <button type="button" class="copy small" data-copy="gp-mac">コピー</button></li>
+          <li>Linux: <code id="gp-linux"></code> <button type="button" class="copy small" data-copy="gp-linux">コピー</button></li>
+        </ul>
+        <div class="row">
+          <label class="radio"><input type="radio" name="globalMode" value="write" checked> フォルダを選択して直接更新</label>
+          <button id="pick-global" type="button">設定フォルダを選択…</button>
+          <span id="global-name" class="path muted">未選択</span>
+        </div>
+        <div class="row">
+          <label class="radio"><input type="radio" name="globalMode" value="download"> 既存ファイルを読み込み、更新版をダウンロード</label>
+        </div>
+        <div id="global-download" class="indent" hidden>
+          <label>sym-lib-table <input type="file" id="in-sym-table"></label>
+          <label>fp-lib-table <input type="file" id="in-fp-table"></label>
+        </div>
+        <p class="hint warn-text">Windows の <code>AppData</code> や macOS の <code>Library</code> はブラウザの制限で選択できないことがあります。その場合は「ダウンロード」方式を使ってください。グローバルテーブルの更新は <strong>KiCad を終了した状態</strong>で行ってください。</p>
+      </div>
+
+      <div id="basepath-box">
+        <h3>KiCad から見たライブラリフォルダのパス</h3>
+        <p id="basepath-auto" class="ok-text" hidden></p>
+        <div id="basepath-manual">
+          <input id="basePath" type="text" placeholder="例: D:/KiCadLib, //nas/share/KiCadLib, ${MY_KICAD_LIB}" size="48">
+          <p class="hint">ブラウザは選択したフォルダの絶対パスを取得できないため、KiCad がこのフォルダを参照するときのパスを入力してください。KiCad の「設定 → パスを設定」で環境変数（例: <code>MY_KICAD_LIB</code>）を登録して <code>${MY_KICAD_LIB}</code> と書くと、PC ごとにドライブ文字が違っても使えます。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="num">3</span>ZIP をドロップ</h2>
+      <div id="dropzone" tabindex="0">
+        <p><strong>ここに ZIP ファイルをドラッグ＆ドロップ</strong>（複数可）</p>
+        <p class="muted">または <button id="pick-files" type="button" class="link">ファイルを選択</button>　.kicad_sym / .kicad_mod / .step 等の単体ファイルも可</p>
+        <input id="file-input" type="file" multiple accept=".zip,.kicad_sym,.kicad_mod,.lib,.dcm,.step,.stp,.wrl" hidden>
+      </div>
+      <p class="hint">対応: Component Search Engine (SamacSys) / SnapEDA / Ultra Librarian / その他 KiCad 形式を含む ZIP</p>
+      <div id="archives"></div>
+
+      <div class="row options">
+        <label>同名の部品が既にある場合
+          <select id="policy"><option value="overwrite">上書き</option><option value="skip">スキップ</option></select>
+        </label>
+        <label class="check"><input type="checkbox" id="backup" checked> 既存ファイルのバックアップ (.bak) を作る</label>
+      </div>
+      <div class="row">
+        <button id="run" type="button" class="primary" disabled>インポート実行</button>
+        <button id="clear" type="button">リストをクリア</button>
+        <span id="run-reason" class="hint warn-text"></span>
+      </div>
+    </section>
+
+    <section class="card" id="result-card" hidden>
+      <h2>結果</h2>
+      <div id="downloads" class="row"></div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <footer>
+    <p>KiCad Library Importer — 処理はブラウザ内のみで行われます。<a href="https://github.com/Celestial-globe">GitHub</a></p>
+  </footer>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

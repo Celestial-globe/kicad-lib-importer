@@ -1,0 +1,42 @@
+<!DOCTYPE html><meta charset="utf-8"><title>test harness</title><link rel="icon" href="data:,">
+<script type="module">
+import { readZipRecursive } from '../js/zip.js';
+import { analyzeArchive } from '../js/kicad.js';
+import { runImport, getDir, readText, writeFile } from '../js/importer.js';
+
+async function dump(dir, prefix = '') {
+  const out = {};
+  for await (const [name, h] of dir.entries()) {
+    if (h.kind === 'directory') Object.assign(out, await dump(h, prefix + name + '/'));
+    else out[prefix + name] = await (await h.getFile()).text();
+  }
+  return out;
+}
+
+window.runTest = async (opts) => {
+  const opfs = await navigator.storage.getDirectory();
+  for await (const name of opfs.keys()) await opfs.removeEntry(name, { recursive: true });
+  const project = await getDir(opfs, ['proj']);
+  await writeFile(project, 'proj.kicad_pro', '{}');
+  if (opts.existingSymTable) await writeFile(project, 'sym-lib-table', opts.existingSymTable);
+  const libRoot = await getDir(project, ['lib']);
+  const analyses = [];
+  for (const f of opts.files) {
+    const buf = await (await fetch('fixtures/' + f)).arrayBuffer();
+    analyses.push(analyzeArchive(await readZipRecursive(buf), f));
+  }
+  const rel = await project.resolve(libRoot);
+  const logs = [];
+  const res = await runImport(analyses, {
+    libMode: opts.libMode || 'merged', libName: 'MyParts', policy: 'overwrite',
+    basePath: '${KIPRJMOD}/' + rel.join('/'), kicadMajor: 9, tableMode: 'write', backup: true,
+  }, { libRoot, tableDir: project }, (m, l) => logs.push((l ? `[${l}] ` : '') + m));
+  // 2 回目（同じものを再インポート → テーブルは変化しないこと）
+  const res2 = await runImport(analyses, {
+    libMode: opts.libMode || 'merged', libName: 'MyParts', policy: 'overwrite',
+    basePath: '${KIPRJMOD}/' + rel.join('/'), kicadMajor: 9, tableMode: 'write', backup: false,
+  }, { libRoot, tableDir: project }, (m, l) => logs.push('#2 ' + (l ? `[${l}] ` : '') + m));
+  return { files: await dump(opfs), logs, sources: analyses.map((a) => a.source), warnings: analyses.map(a => a.warnings), tables2: res2.tables };
+};
+window.ready = true;
+</script>
