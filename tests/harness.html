@@ -25,18 +25,28 @@ window.runTest = async (opts) => {
     const buf = await (await fetch('fixtures/' + f)).arrayBuffer();
     analyses.push(analyzeArchive(await readZipRecursive(buf), f));
   }
-  const rel = await project.resolve(libRoot);
   const logs = [];
+  const mkDest = async () => {
+    if (!opts.separate) return { separate: false, sym: { dir: libRoot, base: '${KIPRJMOD}/lib' } };
+    return {
+      separate: true,
+      sym: { dir: await getDir(opfs, ['shared', 'symbols']), base: '${MY_LIB}/symbols' },
+      fp: { dir: await getDir(opfs, ['shared', opts.fpDirName || 'footprints']), base: '${MY_LIB}/' + (opts.fpDirName || 'footprints') },
+      model: { dir: await getDir(opfs, ['shared', '3d']), base: '${MY_LIB}/3d' },
+    };
+  };
+  const tableMode = opts.tableMode || 'write';
+  const tableTexts = opts.tableTexts || {};
   const res = await runImport(analyses, {
     libMode: opts.libMode || 'merged', libName: 'MyParts', policy: 'overwrite',
-    basePath: '${KIPRJMOD}/' + rel.join('/'), kicadMajor: 9, tableMode: 'write', backup: true,
-  }, { libRoot, tableDir: project }, (m, l) => logs.push((l ? `[${l}] ` : '') + m));
+    kicadMajor: 9, tableMode, backup: true,
+  }, { dest: await mkDest(), tableDir: project, tableTexts }, (m, l) => logs.push((l ? `[${l}] ` : '') + m));
   // 2 回目（同じものを再インポート → テーブルは変化しないこと）
   const res2 = await runImport(analyses, {
     libMode: opts.libMode || 'merged', libName: 'MyParts', policy: 'overwrite',
-    basePath: '${KIPRJMOD}/' + rel.join('/'), kicadMajor: 9, tableMode: 'write', backup: false,
-  }, { libRoot, tableDir: project }, (m, l) => logs.push('#2 ' + (l ? `[${l}] ` : '') + m));
-  return { files: await dump(opfs), logs, sources: analyses.map((a) => a.source), warnings: analyses.map(a => a.warnings), tables2: res2.tables };
+    kicadMajor: 9, tableMode, backup: false,
+  }, { dest: await mkDest(), tableDir: project, tableTexts }, (m, l) => logs.push('#2 ' + (l ? `[${l}] ` : '') + m));
+  return { files: await dump(opfs), logs, sources: analyses.map((a) => a.source), warnings: analyses.map(a => a.warnings), tables2: res2.tables, tables: res.tables, symEntries: res.symEntries, fpEntries: res.fpEntries };
 };
 window.ready = true;
 </script>

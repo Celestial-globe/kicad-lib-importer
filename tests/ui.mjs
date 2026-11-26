@@ -24,6 +24,13 @@ assert.ok(srcs.some((s) => s.startsWith('SamacSys')));
 assert.ok(srcs.includes('SnapEDA'));
 assert.ok(srcs.includes('Ultra Librarian'));
 assert.equal(await page.isDisabled('#run'), true); // フォルダ未選択
+assert.equal(await page.$$eval('#dests .dest', (e) => e.length), 1);
+await page.check('#separate');
+assert.equal(await page.$$eval('#dests .dest', (e) => e.length), 3);
+await page.fill('input[data-base="fp"]', 'D:/Lib/fp');
+assert.equal(await page.inputValue('input[data-base="fp"]'), 'D:/Lib/fp');
+await page.check('input[name="scope"][value="global"]');
+assert.equal(await page.isVisible('#global-manual'), true);
 if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
 assert.deepEqual(errors, []);
 console.log('UI OK');

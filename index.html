@@ -20,10 +20,11 @@
     <section class="card">
       <h2><span class="num">1</span>ライブラリの保存先</h2>
       <div class="row">
-        <button id="pick-libroot" type="button">フォルダを選択…</button>
-        <span id="libroot-name" class="path muted">未選択</span>
+        <label class="check"><input type="checkbox" id="separate"> シンボル・フットプリント・3D モデルの保存先を個別に指定する</label>
       </div>
-      <p class="hint">ローカルフォルダのほか、ネットワークドライブ（例: <code>Z:\KiCadLib</code>）も選択できます。選択したフォルダは次回以降も記憶されます。</p>
+      <div id="dests"></div>
+      <p class="hint">ローカルフォルダのほか、ネットワークドライブ（例: <code>Z:\KiCadLib</code>）も選択できます。選択したフォルダは次回以降も記憶されます。<br>
+      「KiCad から見たパス」はブラウザが絶対パスを取得できないために必要です。KiCad の「設定 → パスを設定」で環境変数（例: <code>MY_KICAD_LIB</code>）を登録して <code>${MY_KICAD_LIB}</code> と書くと、PC ごとにドライブ文字が違っても使えます。プロジェクト登録で保存先がプロジェクト内にある場合は自動で <code>${KIPRJMOD}</code> 相対になります。</p>
 
       <div class="row">
         <label class="radio"><input type="radio" name="libMode" value="merged" checked> 1つのライブラリにまとめる</label>
@@ -66,28 +67,22 @@
           <li>Linux: <code id="gp-linux"></code> <button type="button" class="copy small" data-copy="gp-linux">コピー</button></li>
         </ul>
         <div class="row">
-          <label class="radio"><input type="radio" name="globalMode" value="write" checked> フォルダを選択して直接更新</label>
-          <button id="pick-global" type="button">設定フォルダを選択…</button>
-          <span id="global-name" class="path muted">未選択</span>
+          <label class="radio"><input type="radio" name="globalMode" value="manual" checked> KiCad で登録する内容を表示する（おすすめ）</label>
         </div>
-        <div class="row">
-          <label class="radio"><input type="radio" name="globalMode" value="download"> 既存ファイルを読み込み、更新版をダウンロード</label>
-        </div>
-        <div id="global-download" class="indent" hidden>
+        <div id="global-manual" class="indent">
+          <p class="hint">インポート後に、KiCad の「設定 → シンボルライブラリを管理 / フットプリントライブラリを管理」の「グローバルライブラリ」タブへ登録するライブラリ名とパスを表示します。1 つのライブラリにまとめる設定なら、<strong>登録は最初の 1 回だけ</strong>で、以降は部品が同じライブラリに追記されるだけなので作業は要りません。</p>
+          <p class="hint">既存のテーブルを読み込むと、更新したファイルもダウンロードできます（任意）。</p>
           <label>sym-lib-table <input type="file" id="in-sym-table"></label>
           <label>fp-lib-table <input type="file" id="in-fp-table"></label>
         </div>
-        <p class="hint warn-text">Windows の <code>AppData</code> や macOS の <code>Library</code> はブラウザの制限で選択できないことがあります。その場合は「ダウンロード」方式を使ってください。グローバルテーブルの更新は <strong>KiCad を終了した状態</strong>で行ってください。</p>
+        <div class="row">
+          <label class="radio"><input type="radio" name="globalMode" value="write"> 設定フォルダを選択して直接更新する</label>
+          <button id="pick-global" type="button">設定フォルダを選択…</button>
+          <span id="global-name" class="path muted">未選択</span>
+        </div>
+        <p class="hint warn-text">Windows の <code>AppData</code> や macOS の <code>Library</code> は Chrome / Edge の制限で選択できません。直接更新が使えるのは主に Linux です。直接更新する場合は <strong>KiCad を終了した状態</strong>で行ってください。</p>
       </div>
 
-      <div id="basepath-box">
-        <h3>KiCad から見たライブラリフォルダのパス</h3>
-        <p id="basepath-auto" class="ok-text" hidden></p>
-        <div id="basepath-manual">
-          <input id="basePath" type="text" placeholder="例: D:/KiCadLib, //nas/share/KiCadLib, ${MY_KICAD_LIB}" size="48">
-          <p class="hint">ブラウザは選択したフォルダの絶対パスを取得できないため、KiCad がこのフォルダを参照するときのパスを入力してください。KiCad の「設定 → パスを設定」で環境変数（例: <code>MY_KICAD_LIB</code>）を登録して <code>${MY_KICAD_LIB}</code> と書くと、PC ごとにドライブ文字が違っても使えます。</p>
-        </div>
-      </div>
     </section>
 
     <section class="card">
@@ -115,6 +110,7 @@
 
     <section class="card" id="result-card" hidden>
       <h2>結果</h2>
+      <div id="global-steps" hidden></div>
       <div id="downloads" class="row"></div>
       <pre id="log"></pre>
     </section>

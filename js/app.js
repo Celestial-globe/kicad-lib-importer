@@ -25,6 +25,7 @@ const saveHandle = (k, h) => idb('readwrite', (s) => s.put(h, k)).catch(() => {}
 const loadHandle = (k) => idb('readonly', (s) => s.get(k)).catch(() => null);
 
 const SETTINGS_KEY = 'kicad-lib-importer.settings';
+const REGISTERED_KEY = 'kicad-lib-importer.globalRegistered';
 function loadSettings() {
   try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch { return {}; }
 }
@@ -32,9 +33,17 @@ function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({
     libMode: radio('libMode'), libName: $('libName').value, scope: radio('scope'),
     globalMode: radio('globalMode'), kicadMajor: $('kicadMajor').value,
-    basePath: $('basePath').value, policy: $('policy').value, backup: $('backup').checked,
+    separate: $('separate').checked, basePaths: state.basePaths,
+    policy: $('policy').value, backup: $('backup').checked,
   }));
 }
+function loadRegistered() {
+  try { return new Set(JSON.parse(localStorage.getItem(REGISTERED_KEY)) || []); } catch { return new Set(); }
+}
+function saveRegistered(set) {
+  localStorage.setItem(REGISTERED_KEY, JSON.stringify([...set]));
+}
+const regKey = (kind, e) => `${kind}|${e.name}|${e.uri}`;
 
 const radio = (name) => document.querySelector(`input[name="${name}"]:checked`)?.value;
 const setRadio = (name, v) => {
@@ -44,15 +53,23 @@ const setRadio = (name, v) => {
 
 /* ---------------- 状態 ---------------- */
 
+// 保存先の種類。sym は「共通の保存先」も兼ねる（ハンドルのキーは互換のため libRoot）
+const DESTS = [
+  { key: 'sym', handleKey: 'libRoot', label: 'シンボル', commonLabel: '保存先' },
+  { key: 'fp', handleKey: 'fpRoot', label: 'フットプリント' },
+  { key: 'model', handleKey: 'modelRoot', label: '3D モデル' },
+];
+
 const state = {
-  libRoot: null,
-  projectDir: null,
-  globalDir: null,
-  archives: [], // {id, name, analysis?, error?}
+  handles: { libRoot: null, fpRoot: null, modelRoot: null, projectDir: null, globalDir: null },
+  basePaths: { sym: '', fp: '', model: '' }, // 手入力の KiCad パス
+  autoBases: { sym: null, fp: null, model: null }, // ${KIPRJMOD} 相対が使える場合
+  archives: [],
   tableTexts: { sym: null, fp: null },
-  autoBase: null, // ${KIPRJMOD} 相対が使える場合のパス
 };
 let nextId = 1;
+
+const activeDests = () => ($('separate').checked ? DESTS : DESTS.slice(0, 1));
 
 /* ---------------- 権限 ---------------- */
 
@@ -66,41 +83,70 @@ async function ensurePermission(handle) {
 async function pickDir(key, id) {
   try {
     const h = await window.showDirectoryPicker({ id, mode: 'readwrite' });
-    state[key] = h;
+    state.handles[key] = h;
     await saveHandle(key, h);
     await refresh();
   } catch (e) {
-    if (e.name !== 'AbortError') alert(`フォルダを開けませんでした: ${e.message}`);
+    if (e.name === 'AbortError') return;
+    alert(`フォルダを開けませんでした: ${e.message}`);
   }
 }
 
 /* ---------------- 表示更新 ---------------- */
 
-async function computeAutoBase() {
-  state.autoBase = null;
-  if (radio('scope') !== 'project' || !state.projectDir || !state.libRoot) return;
-  try {
-    const rel = await state.projectDir.resolve(state.libRoot);
-    if (rel) state.autoBase = '${KIPRJMOD}' + (rel.length ? '/' + rel.join('/') : '');
-  } catch { /* 別ドライブ等 */ }
+async function computeAutoBases() {
+  for (const d of DESTS) {
+    state.autoBases[d.key] = null;
+    const h = state.handles[d.handleKey];
+    if (radio('scope') !== 'project' || !state.handles.projectDir || !h) continue;
+    try {
+      const rel = await state.handles.projectDir.resolve(h);
+      if (rel) state.autoBases[d.key] = '${KIPRJMOD}' + (rel.length ? '/' + rel.join('/') : '');
+    } catch { /* 別ドライブ等 */ }
+  }
 }
 
-function basePath() {
-  return state.autoBase || normalizeKicadPath($('basePath').value);
+const basePathOf = (key) => state.autoBases[key] || normalizeKicadPath(state.basePaths[key]);
+
+function renderDests() {
+  const box = $('dests');
+  const focused = document.activeElement?.dataset?.base;
+  box.innerHTML = '';
+  const sep = $('separate').checked;
+  for (const d of activeDests()) {
+    const h = state.handles[d.handleKey];
+    const div = document.createElement('div');
+    div.className = 'dest';
+    const auto = state.autoBases[d.key];
+    div.innerHTML = `
+      <div class="row">
+        <strong class="dest-label">${sep ? d.label : (d.commonLabel || d.label)}</strong>
+        <button type="button" data-pick="${d.handleKey}">フォルダを選択…</button>
+        <span class="path ${h ? '' : 'muted'}">${h ? '📁 ' + esc(h.name) : '未選択'}</span>
+      </div>
+      <div class="row indent-row">
+        <span class="hint">KiCad から見たパス</span>
+        ${auto
+          ? `<span class="ok-text path">${esc(auto)}（プロジェクト内のため自動）</span>`
+          : `<input type="text" data-base="${d.key}" value="${esc(state.basePaths[d.key] || '')}" size="44"
+               placeholder="例: D:/KiCadLib, //nas/share/KiCadLib, \${MY_KICAD_LIB}">`}
+      </div>`;
+    box.appendChild(div);
+  }
+  if (focused) box.querySelector(`input[data-base="${focused}"]`)?.focus();
 }
 
 async function refresh() {
   const scope = radio('scope');
-  $('libroot-name').textContent = state.libRoot ? `📁 ${state.libRoot.name}` : '未選択';
-  $('libroot-name').classList.toggle('muted', !state.libRoot);
-  $('project-name').textContent = state.projectDir ? `📁 ${state.projectDir.name}` : '未選択';
-  $('project-name').classList.toggle('muted', !state.projectDir);
-  $('global-name').textContent = state.globalDir ? `📁 ${state.globalDir.name}` : '未選択';
-  $('global-name').classList.toggle('muted', !state.globalDir);
+  const H = state.handles;
+  $('project-name').textContent = H.projectDir ? `📁 ${H.projectDir.name}` : '未選択';
+  $('project-name').classList.toggle('muted', !H.projectDir);
+  $('global-name').textContent = H.globalDir ? `📁 ${H.globalDir.name}` : '未選択';
+  $('global-name').classList.toggle('muted', !H.globalDir);
 
   $('scope-project').hidden = scope !== 'project';
   $('scope-global').hidden = scope !== 'global';
-  $('global-download').hidden = radio('globalMode') !== 'download';
+  $('global-manual').hidden = radio('globalMode') !== 'manual';
   $('libName').disabled = radio('libMode') !== 'merged';
 
   const v = $('kicadMajor').value;
@@ -108,21 +154,27 @@ async function refresh() {
   $('gp-mac').textContent = `~/Library/Preferences/kicad/${v}/`;
   $('gp-linux').textContent = `~/.config/kicad/${v}/`;
 
-  await computeAutoBase();
-  if (state.autoBase) {
-    $('basepath-auto').hidden = false;
-    $('basepath-auto').textContent = `✔ ライブラリフォルダがプロジェクト内にあるため、相対パス ${state.autoBase} を使います（プロジェクトごと移動・共有しても有効）。`;
-    $('basepath-manual').hidden = true;
-  } else {
-    $('basepath-auto').hidden = true;
-    $('basepath-manual').hidden = false;
-  }
+  await computeAutoBases();
+  renderDests();
 
   const lib = sanitizeNickname($('libName').value || 'MyParts');
-  const b = basePath() || '<パス>';
-  $('layout-hint').innerHTML = radio('libMode') === 'merged'
-    ? `保存先に <code>${esc(lib)}.kicad_sym</code>, <code>${esc(lib)}.pretty/</code>, <code>${esc(lib)}.3dshapes/</code> を作成し、部品を追記していきます。テーブル登録は初回だけで済みます。<br>KiCad での参照: <code>${esc(b)}/${esc(lib)}.kicad_sym</code>`
-    : `保存先に部品名のフォルダを作り、その中に <code>部品名.kicad_sym</code>, <code>部品名.pretty/</code>, <code>部品名.3dshapes/</code> を作成します。`;
+  const sep = $('separate').checked;
+  const fpIsPretty = sep && /\.pretty$/i.test(H.fpRoot?.name || '');
+  const b = (k) => esc(basePathOf(k) || '<パス>');
+  const merged = radio('libMode') === 'merged';
+  const name = merged ? esc(lib) : '部品名';
+  let html;
+  if (!sep) {
+    html = merged
+      ? `保存先に <code>${name}.kicad_sym</code>, <code>${name}.pretty/</code>, <code>${name}.3dshapes/</code> を作成し、部品を追記していきます。テーブル登録は初回だけで済みます。`
+      : `保存先に部品名のフォルダを作り、その中に <code>部品名.kicad_sym</code>, <code>部品名.pretty/</code>, <code>部品名.3dshapes/</code> を作成します。`;
+  } else {
+    html = `シンボル: <code>${b('sym')}/${name}.kicad_sym</code><br>`
+      + `フットプリント: <code>${fpIsPretty ? b('fp') : `${b('fp')}/${name}.pretty`}</code>`
+      + (fpIsPretty ? '（選んだ .pretty フォルダに直接保存）' : '（選んだフォルダが <code>xxx.pretty</code> ならそこへ直接保存します）') + '<br>'
+      + `3D モデル: <code>${b('model')}/${merged ? '' : '部品名/'}</code>`;
+  }
+  $('layout-hint').innerHTML = html;
 
   renderArchives();
   updateRunButton();
@@ -138,12 +190,17 @@ function updateRunButton() {
 function canRun() {
   const ready = state.archives.filter((a) => a.analysis);
   if (!supportsFS) return { ok: false, reason: '対応ブラウザで開いてください' };
-  if (!state.libRoot) return { ok: false, reason: '保存先フォルダを選択してください' };
+  for (const d of activeDests()) {
+    const what = $('separate').checked ? d.label + 'の' : '';
+    if (!state.handles[d.handleKey]) return { ok: false, reason: `${what}保存先フォルダを選択してください` };
+  }
   if (!ready.length) return { ok: false, reason: 'ZIP をドロップしてください' };
   const scope = radio('scope');
-  if (scope === 'project' && !state.projectDir) return { ok: false, reason: 'プロジェクトフォルダを選択してください' };
-  if (scope === 'global' && radio('globalMode') === 'write' && !state.globalDir) return { ok: false, reason: '設定フォルダを選択してください' };
-  if (!basePath()) return { ok: false, reason: 'KiCad から見たライブラリフォルダのパスを入力してください' };
+  if (scope === 'project' && !state.handles.projectDir) return { ok: false, reason: 'プロジェクトフォルダを選択してください' };
+  if (scope === 'global' && radio('globalMode') === 'write' && !state.handles.globalDir) return { ok: false, reason: '設定フォルダを選択してください' };
+  for (const d of activeDests()) {
+    if (!basePathOf(d.key)) return { ok: false, reason: `KiCad から見た${$('separate').checked ? d.label + 'の' : ''}パスを入力してください` };
+  }
   return { ok: true };
 }
 
@@ -241,39 +298,95 @@ function download(name, text) {
   a.className = 'dl';
   return a;
 }
+/** グローバル手動登録の案内を表示 */
+function showGlobalSteps(res) {
+  const box = $('global-steps');
+  const registered = loadRegistered();
+  const rows = [
+    ...res.symEntries.map((e) => ({ kind: 'sym', ...e })),
+    ...res.fpEntries.map((e) => ({ kind: 'fp', ...e })),
+  ];
+  const todo = rows.filter((r) => !registered.has(regKey(r.kind, r)));
+  box.hidden = false;
+  if (!rows.length) { box.innerHTML = ''; return; }
+  if (!todo.length) {
+    box.innerHTML = '<p class="ok-text">✔ グローバルライブラリには登録済みです。KiCad を開き直すと追加した部品が使えます（追加の作業はありません）。</p>';
+    return;
+  }
+  const kindLabel = { sym: 'シンボル', fp: 'フットプリント' };
+  const lines = (kind) => todo.filter((r) => r.kind === kind)
+    .map((r) => `  (lib (name "${r.name}")(type "${r.type}")(uri "${r.uri}")(options "")(descr "${r.descr || ''}"))`).join('\n');
+  box.innerHTML = `
+    <h3>KiCad のグローバルライブラリに登録してください（初回のみ）</h3>
+    <ol class="steps">
+      <li>KiCad を開き、「設定 → シンボルライブラリを管理」（フットプリントは「設定 → フットプリントライブラリを管理」）を開く</li>
+      <li>「グローバルライブラリ」タブで「＋」を押し、下の表のライブラリ名・ライブラリパス・形式を入力（コピーボタンを使えます）</li>
+      <li>OK で閉じる。登録したら下の「登録しました」を押すと、次回からこの案内は出ません</li>
+    </ol>
+    <table class="reg">
+      <thead><tr><th>種類</th><th>ライブラリ名</th><th>ライブラリパス</th><th>形式</th></tr></thead>
+      <tbody>${todo.map((r, i) => `<tr>
+        <td>${kindLabel[r.kind]}</td>
+        <td><code>${esc(r.name)}</code> <button type="button" class="small" data-copytext="${i}|name">コピー</button></td>
+        <td><code>${esc(r.uri)}</code> <button type="button" class="small" data-copytext="${i}|uri">コピー</button></td>
+        <td>${esc(r.type)}</td></tr>`).join('')}</tbody>
+    </table>
+    <details><summary>テーブルファイルを直接編集する場合の追記行</summary>
+      <p class="hint">KiCad を終了してから、設定フォルダの各ファイルの最後の <code>)</code> の前に貼り付けてください。</p>
+      ${['sym', 'fp'].filter((k) => lines(k)).map((k) => `<p><code>${k}-lib-table</code> <button type="button" class="small" data-copylines="${k}">コピー</button></p><pre class="snippet">${esc(lines(k))}</pre>`).join('')}
+    </details>
+    <div class="row"><button type="button" id="mark-registered">登録しました</button></div>`;
+  box.onclick = (e) => {
+    const t = e.target;
+    if (t.dataset.copytext) {
+      const [i, field] = t.dataset.copytext.split('|');
+      navigator.clipboard.writeText(todo[Number(i)][field]);
+    } else if (t.dataset.copylines) {
+      navigator.clipboard.writeText(lines(t.dataset.copylines) + '\n');
+    } else if (t.id === 'mark-registered') {
+      const set = loadRegistered();
+      for (const r of todo) set.add(regKey(r.kind, r));
+      saveRegistered(set);
+      box.innerHTML = '<p class="ok-text">✔ 登録済みとして記録しました。次回からは同じライブラリへの追加で案内は出ません。</p>';
+    }
+  };
+}
 
 async function run() {
   const chk = canRun();
   if (!chk.ok) return alert(chk.reason);
   const scope = radio('scope');
+  const H = state.handles;
   $('result-card').hidden = false;
   $('downloads').innerHTML = '';
+  $('global-steps').hidden = true;
   const log = logger();
   $('run').disabled = true;
   try {
-    if (!(await ensurePermission(state.libRoot))) throw new Error('保存先フォルダへの書き込みが許可されませんでした');
+    const dest = { separate: $('separate').checked };
+    for (const d of activeDests()) {
+      const h = H[d.handleKey];
+      if (!(await ensurePermission(h))) throw new Error(`${d.label}の保存先フォルダへの書き込みが許可されませんでした`);
+      dest[d.key] = { dir: h, base: basePathOf(d.key) };
+    }
     let tableMode = 'none';
     let tableDir = null;
     if (scope === 'project') {
-      if (!(await ensurePermission(state.projectDir))) throw new Error('プロジェクトフォルダへの書き込みが許可されませんでした');
+      if (!(await ensurePermission(H.projectDir))) throw new Error('プロジェクトフォルダへの書き込みが許可されませんでした');
       tableMode = 'write';
-      tableDir = state.projectDir;
+      tableDir = H.projectDir;
+      let hasPro = false;
+      for await (const name of H.projectDir.keys()) if (/\.kicad_pro$/i.test(name)) { hasPro = true; break; }
+      if (!hasPro) log('⚠ 選択したプロジェクトフォルダに .kicad_pro が見つかりません。フォルダが正しいか確認してください', 'warn');
     } else if (scope === 'global') {
       tableMode = radio('globalMode');
       if (tableMode === 'write') {
-        if (!(await ensurePermission(state.globalDir))) throw new Error('設定フォルダへの書き込みが許可されませんでした');
-        tableDir = state.globalDir;
+        if (!(await ensurePermission(H.globalDir))) throw new Error('設定フォルダへの書き込みが許可されませんでした');
+        tableDir = H.globalDir;
+        let hasTable = false;
+        for await (const name of H.globalDir.keys()) if (name === 'sym-lib-table' || name === 'fp-lib-table') { hasTable = true; break; }
+        if (!hasTable) log('⚠ 選択したフォルダに既存の sym-lib-table / fp-lib-table がありません。KiCad の設定フォルダか確認してください', 'warn');
       }
-    }
-    if (scope === 'project') {
-      let hasPro = false;
-      for await (const name of state.projectDir.keys()) if (/\.kicad_pro$/i.test(name)) { hasPro = true; break; }
-      if (!hasPro) log('⚠ 選択したプロジェクトフォルダに .kicad_pro が見つかりません。フォルダが正しいか確認してください', 'warn');
-    }
-    if (scope === 'global' && tableMode === 'write') {
-      let hasTable = false;
-      for await (const name of state.globalDir.keys()) if (name === 'sym-lib-table' || name === 'fp-lib-table') { hasTable = true; break; }
-      if (!hasTable) log('⚠ 選択したフォルダに既存の sym-lib-table / fp-lib-table がありません。KiCad の設定フォルダか確認してください', 'warn');
     }
 
     const analyses = state.archives.filter((a) => a.analysis).map((a) => a.analysis);
@@ -281,17 +394,19 @@ async function run() {
       libMode: radio('libMode'),
       libName: $('libName').value,
       policy: $('policy').value,
-      basePath: basePath(),
       kicadMajor: parseInt(scope === 'global' ? $('kicadMajor').value : '9', 10),
       tableMode,
       backup: $('backup').checked,
-    }, { libRoot: state.libRoot, tableDir, tableTexts: state.tableTexts }, log);
+    }, { dest, tableDir, tableTexts: state.tableTexts }, log);
 
     const { symbols, footprints, models } = res.summary;
     log(`✔ 完了: シンボル ${symbols} / フットプリント ${footprints} / 3D モデル ${models}`, 'ok');
-    if (tableMode === 'download') {
+    if (tableMode === 'manual') {
+      showGlobalSteps(res);
       for (const t of Object.values(res.tables)) $('downloads').appendChild(download(t.fileName, t.text));
-      log(`ダウンロードしたファイルを KiCad 終了後に ${$('gp-win').textContent}（OS に応じた設定フォルダ）へ上書きしてください。`, 'warn');
+      if (Object.keys(res.tables).length) {
+        log('（任意）ダウンロードしたテーブルは、KiCad 終了後に設定フォルダへ上書きしても登録できます。', 'warn');
+      }
     }
     if (tableMode === 'write') {
       log(scope === 'project'
@@ -318,20 +433,32 @@ async function init() {
   if (s.libMode) setRadio('libMode', s.libMode);
   if (s.libName) $('libName').value = s.libName;
   if (s.scope) setRadio('scope', s.scope);
-  if (s.globalMode) setRadio('globalMode', s.globalMode);
+  if (s.globalMode === 'write') setRadio('globalMode', 'write');
   if (s.kicadMajor) $('kicadMajor').value = s.kicadMajor;
-  if (s.basePath) $('basePath').value = s.basePath;
+  if (s.basePaths) Object.assign(state.basePaths, s.basePaths);
+  else if (s.basePath) state.basePaths.sym = s.basePath; // 旧版の設定
+  $('separate').checked = !!s.separate;
   if (s.policy) $('policy').value = s.policy;
   if (typeof s.backup === 'boolean') $('backup').checked = s.backup;
-  for (const k of ['libRoot', 'projectDir', 'globalDir']) state[k] = (await loadHandle(k)) || null;
+  for (const k of Object.keys(state.handles)) state.handles[k] = (await loadHandle(k)) || null;
 
-  $('pick-libroot').onclick = () => pickDir('libRoot', 'kli-libroot');
   $('pick-project').onclick = () => pickDir('projectDir', 'kli-project');
   $('pick-global').onclick = () => pickDir('globalDir', 'kli-global');
-  for (const el of document.querySelectorAll('input[type=radio], select, #libName, #basePath, #backup')) {
+  $('dests').addEventListener('click', (e) => {
+    const k = e.target.dataset?.pick;
+    if (k) pickDir(k, `kli-${k}`);
+  });
+  $('dests').addEventListener('input', (e) => {
+    const k = e.target.dataset?.base;
+    if (!k) return;
+    state.basePaths[k] = e.target.value;
+    updateRunButton();
+    saveSettings();
+  });
+  $('dests').addEventListener('change', (e) => { if (e.target.dataset?.base) refresh(); });
+  for (const el of document.querySelectorAll('input[type=radio], select, #libName, #backup, #separate')) {
     el.addEventListener('change', refresh);
   }
-  $('basePath').addEventListener('input', () => { updateRunButton(); saveSettings(); });
   $('libName').addEventListener('input', refresh);
 
   for (const [id, kind] of [['in-sym-table', 'sym'], ['in-fp-table', 'fp']]) {
@@ -350,7 +477,6 @@ async function init() {
   ['dragenter', 'dragover'].forEach((t) => dz.addEventListener(t, (e) => { e.preventDefault(); dz.classList.add('over'); }));
   ['dragleave', 'drop'].forEach((t) => dz.addEventListener(t, (e) => { e.preventDefault(); dz.classList.remove('over'); }));
   dz.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
-  // ページのどこにドロップしてもブラウザでファイルが開かないようにする
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => { e.preventDefault(); if (!dz.contains(e.target)) addFiles(e.dataTransfer.files); });
 

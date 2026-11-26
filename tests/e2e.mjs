@@ -76,6 +76,35 @@ try {
   assert.match(r2.files['proj/lib/LM358DR/LM358DR.kicad_sym'], /"LM358DR:SOIC127P600X175-8N"/);
   assert.match(r2.files['proj/fp-lib-table'], /\$\{KIPRJMOD\}\/lib\/TPS62130RGTR\/TPS62130RGTR\.pretty/);
   assert.ok(r2.files['proj/lib/LM358DR/LM358DR.pretty/SOIC127P600X175-8N.kicad_mod'].includes('${KIPRJMOD}/lib/LM358DR/LM358DR.3dshapes/LM358DR.stp'));
+
+  // 保存先を個別指定（フットプリントは .pretty フォルダを直接指定）
+  const r3 = await page.evaluate(() => window.runTest({ files: ['LIB_LM358DR.zip', 'ul_TPS62130RGTR.zip'], separate: true, fpDirName: 'Company.pretty' }));
+  const f3 = r3.files;
+  console.log(Object.keys(f3).sort().join('\n'));
+  assert.match(f3['shared/symbols/MyParts.kicad_sym'], /"Footprint" "Company:SOIC127P600X175-8N"/);
+  assert.ok(f3['shared/Company.pretty/RGT16_3P1X3P1.kicad_mod'].includes('(model "${MY_LIB}/3d/RGT16_3P1X3P1.step"'));
+  assert.ok(f3['shared/3d/LM358DR.stp']);
+  assert.match(f3['proj/sym-lib-table'], /\(uri "\$\{MY_LIB\}\/symbols\/MyParts\.kicad_sym"\)/);
+  assert.match(f3['proj/fp-lib-table'], /\(name "Company"\)\(type "KiCad"\)\(uri "\$\{MY_LIB\}\/Company\.pretty"\)/);
+
+  // 個別指定 + 部品ごと（.pretty ではない普通のフォルダ）
+  const r4 = await page.evaluate(() => window.runTest({ files: ['LIB_LM358DR.zip'], separate: true, libMode: 'perPart' }));
+  assert.ok(r4.files['shared/footprints/LM358DR.pretty/SOIC127P600X175-8N.kicad_mod'].includes('${MY_LIB}/3d/LM358DR/LM358DR.stp'));
+  assert.ok(r4.files['shared/3d/LM358DR/LM358DR.stp']);
+  assert.ok(r4.files['shared/symbols/LM358DR.kicad_sym']);
+
+  // グローバル手動登録: 既存テーブル無し → テーブルは作らずエントリのみ返す
+  const r5 = await page.evaluate(() => window.runTest({ files: ['LIB_LM358DR.zip'], tableMode: 'manual' }));
+  assert.deepEqual(Object.keys(r5.tables), []);
+  assert.equal(r5.symEntries[0].uri, '${KIPRJMOD}/lib/MyParts.kicad_sym');
+  assert.equal(r5.files['proj/sym-lib-table'], undefined);
+  // 既存テーブルあり → 更新版を返す（標準ライブラリの行は残る）
+  const g = '(sym_lib_table\n  (version 7)\n  (lib (name "Device")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/Device.kicad_sym")(options "")(descr ""))\n)\n';
+  const r6 = await page.evaluate((g) => window.runTest({ files: ['LIB_LM358DR.zip'], tableMode: 'manual', tableTexts: { sym: g } }), g);
+  assert.match(r6.tables.sym.text, /name "Device"/);
+  assert.match(r6.tables.sym.text, /name "MyParts"/);
+  assert.equal(r6.tables.fp, undefined);
+
   assert.deepEqual(errors, []);
   console.log('\nALL TESTS PASSED');
 } finally {

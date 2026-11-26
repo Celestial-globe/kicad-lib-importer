@@ -85,3 +85,14 @@ label.radio, label.check { display: inline-flex; align-items: center; gap: 4px; 
 #log .ok { color: var(--ok); font-weight: 700; }
 footer { color: var(--muted); font-size: .8rem; padding-bottom: 32px; }
 footer a { color: var(--accent); }
+.dest { border-left: 3px solid var(--accent-weak); padding-left: 10px; margin: 6px 0; }
+.dest .row { margin: 4px 0; }
+.dest-label { min-width: 7em; }
+.indent-row { margin-left: 7.6em !important; }
+#global-steps { margin-bottom: 12px; }
+#global-steps h3 { margin-top: 0; }
+ol.steps { padding-left: 20px; font-size: .9rem; }
+table.reg { border-collapse: collapse; font-size: .85rem; width: 100%; margin: 8px 0; }
+table.reg th, table.reg td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top; word-break: break-all; }
+pre.snippet { background: var(--bg); border: 1px solid var(--border); padding: 8px; font-size: .75rem; overflow-x: auto; }
+a.dl { margin-right: 12px; }
