@@ -8,6 +8,8 @@
 
 までを一括で行う Web ツールです。インストール不要で、処理はすべてブラウザ内で完結します（ファイルは外部に送信されません）。
 
+> **KiCad プラグイン版もあります。** グローバルのライブラリテーブルへの登録まで自動で行いたい場合は [kicad-plugin/](kicad-plugin/README.md) を使ってください（KiCad 7〜9 の PCB エディタ用プラグイン）。
+
 ## 使い方
 
 1. Chrome または Edge（PC 版）でページを開く
@@ -87,7 +89,7 @@ Chrome / Edge は、Windows の `AppData` や macOS の `Library` のような�
 | macOS | `~/Library/Preferences/kicad/<バージョン>/` |
 | Linux | `~/.config/kicad/<バージョン>/` |
 
-グローバル登録まで完全に自動化するには、ブラウザの外で動くもの（Tauri などのデスクトップアプリ、または KiCad のプラグイン）が必要です。
+グローバル登録まで完全に自動化したい場合は、[KiCad プラグイン版](kicad-plugin/README.md)を使ってください。
 
 ## 動作確認結果
 
