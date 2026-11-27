@@ -1,0 +1,26 @@
+{
+  "$schema": "https://go.kicad.org/pcm/schemas/v1",
+  "name": "KiCad Library Importer",
+  "description": "部品サイトのライブラリ ZIP を保存してテーブル登録まで一括で行います",
+  "description_full": "Component Search Engine (SamacSys)、SnapEDA、Ultra Librarian などからダウンロードした KiCad ライブラリの ZIP をドラッグ＆ドロップするだけで、任意のローカル / ネットワークフォルダへ保存し、シンボル → フットプリント → 3D モデルのリンクを書き換え、プロジェクトまたはグローバルの sym-lib-table / fp-lib-table へ登録します。\n\nImport KiCad library ZIPs from part vendor sites (SamacSys / SnapEDA / Ultra Librarian), fix footprint and 3D model links, and register them in the project or global library tables.",
+  "identifier": "com.github.celestial_globe.kicad_lib_importer",
+  "type": "plugin",
+  "author": {
+    "name": "Celestial-globe",
+    "contact": {
+      "github": "https://github.com/Celestial-globe"
+    }
+  },
+  "license": "MIT",
+  "resources": {
+    "homepage": "https://github.com/Celestial-globe/kicad-lib-importer"
+  },
+  "tags": ["library", "import", "samacsys", "snapeda", "ultralibrarian"],
+  "versions": [
+    {
+      "version": "0.1.0",
+      "status": "testing",
+      "kicad_version": "7.0"
+    }
+  ]
+}

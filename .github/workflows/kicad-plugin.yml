@@ -1,0 +1,27 @@
+name: KiCad plugin
+
+on:
+  push:
+    paths: ["kicad-plugin/**", "js/kicad.js", "js/sexpr.js", "tests/fixtures/**", ".github/workflows/kicad-plugin.yml"]
+  pull_request:
+    paths: ["kicad-plugin/**", "js/kicad.js", "js/sexpr.js", "tests/fixtures/**", ".github/workflows/kicad-plugin.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Test
+        run: python -m unittest discover -s kicad-plugin/tests -v
+      - name: Build PCM package
+        run: python kicad-plugin/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kicad-lib-importer-pcm
+          path: kicad-plugin/dist/*.zip
